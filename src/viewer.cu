@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <numeric>
 #include <string>
 #include <vector>
 
@@ -47,6 +48,7 @@
 
 #include "date.hpp"
 #include "earth.cuh"
+#include "gpu.cuh"
 #include "orbit.hpp"
 #include "propagate.cuh"
 
@@ -54,8 +56,11 @@ namespace {
 
 constexpr int kWindowWidth = 1024, kWindowHeight = 768;
 constexpr int kRefreshMs = 10;
+// Same distance NASA uses to call an asteroid potentially hazardous, applied to actual passes.
+constexpr double kHazardAu = 0.05;
+constexpr int kSearchDays = 3653;
 
-GLuint vbo = 0;
+GLuint vbo = 0, color_vbo = 0;
 cudaGraphicsResource* vbo_resource = nullptr;
 
 Orbit* d_orbits = nullptr;
@@ -79,6 +84,21 @@ __global__ void positions_kernel(const Orbit* orbits, float4* out, int n, double
     if (k >= n) return;
     const Vec3 p = position(orbits[k], t);
     out[k] = make_float4(float(p.x), float(p.y), float(p.z), 1.0f);
+}
+
+std::vector<Approach> search_approaches(double t0, int days) {
+    const auto table = earth_table(t0, 1.0, days);
+    Vec3* d_earth;
+    Approach* d_out;
+    checkCudaErrors(cudaMalloc(&d_earth, days * sizeof(Vec3)));
+    checkCudaErrors(cudaMalloc(&d_out, n_orbits * sizeof(Approach)));
+    checkCudaErrors(cudaMemcpy(d_earth, table.data(), days * sizeof(Vec3), cudaMemcpyHostToDevice));
+    approach_gpu(d_orbits, d_earth, d_out, n_orbits, t0, 1.0, days);
+    std::vector<Approach> out(n_orbits);
+    checkCudaErrors(cudaMemcpy(out.data(), d_out, n_orbits * sizeof(Approach), cudaMemcpyDeviceToHost));
+    checkCudaErrors(cudaFree(d_earth));
+    checkCudaErrors(cudaFree(d_out));
+    return out;
 }
 
 void run_cuda() {
@@ -122,9 +142,12 @@ void display() {
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexPointer(4, GL_FLOAT, 0, nullptr);
+    glBindBuffer(GL_ARRAY_BUFFER, color_vbo);
+    glColorPointer(3, GL_FLOAT, 0, nullptr);
     glEnableClientState(GL_VERTEX_ARRAY);
-    glColor3f(0.8f, 0.8f, 0.8f);
+    glEnableClientState(GL_COLOR_ARRAY);
     glDrawArrays(GL_POINTS, 0, n_orbits);
+    glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
@@ -199,6 +222,7 @@ void cleanup() {
         glDeleteBuffers(1, &vbo);
         vbo = 0;
     }
+    glDeleteBuffers(1, &color_vbo);
     checkCudaErrors(cudaFree(d_orbits));
 }
 
@@ -233,7 +257,7 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "cannot open %s (run scripts/fetch_sbdb.py)\n", path.c_str());
         return EXIT_FAILURE;
     }
-    const std::vector<Orbit> orbits = load_orbits(in);
+    std::vector<Orbit> orbits = load_orbits(in);
     n_orbits = static_cast<int>(orbits.size());
     // A still snapshot at the elements' epoch for now.
     t_jd = orbits.front().epoch;
@@ -251,6 +275,28 @@ int main(int argc, char** argv) {
     checkCudaErrors(
         cudaMemcpy(d_orbits, orbits.data(), n_orbits * sizeof(Orbit), cudaMemcpyHostToDevice));
 
+    // Search once at startup, then draw close passers last so gray points never cover them.
+    const std::vector<Approach> approaches = search_approaches(t_jd, kSearchDays);
+    std::vector<int> order(n_orbits);
+    std::iota(order.begin(), order.end(), 0);
+    const auto first_close = std::stable_partition(
+        order.begin(), order.end(), [&](int k) { return approaches[k].dist >= kHazardAu; });
+    const int n_close = static_cast<int>(order.end() - first_close);
+    std::printf("%d of %d asteroids pass within %.2f AU of Earth in the next %d days\n", n_close,
+                n_orbits, kHazardAu, kSearchDays);
+
+    std::vector<Orbit> sorted(n_orbits);
+    std::vector<float> colors(3 * n_orbits);
+    for (int i = 0; i < n_orbits; ++i) {
+        sorted[i] = orbits[order[i]];
+        const bool close = approaches[order[i]].dist < kHazardAu;
+        colors[3 * i + 0] = close ? 1.0f : 0.5f;
+        colors[3 * i + 1] = close ? 0.2f : 0.5f;
+        colors[3 * i + 2] = close ? 0.2f : 0.5f;
+    }
+    checkCudaErrors(
+        cudaMemcpy(d_orbits, sorted.data(), n_orbits * sizeof(Orbit), cudaMemcpyHostToDevice));
+
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, n_orbits * sizeof(float4), nullptr, GL_DYNAMIC_DRAW);
@@ -258,6 +304,12 @@ int main(int argc, char** argv) {
     // WriteDiscard: CUDA rewrites the whole buffer each frame, so GL never preserves old contents.
     checkCudaErrors(
         cudaGraphicsGLRegisterBuffer(&vbo_resource, vbo, cudaGraphicsMapFlagsWriteDiscard));
+
+    // Colours never change, so they live in a static buffer uploaded once.
+    glGenBuffers(1, &color_vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, color_vbo);
+    glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(float), colors.data(), GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
 
     sdkCreateTimer(&timer);
     glutDisplayFunc(display);
