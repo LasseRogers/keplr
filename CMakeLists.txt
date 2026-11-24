@@ -41,3 +41,7 @@ target_link_libraries(keplr_gpu PUBLIC keplr_core)
 add_executable(test_gpu tests/test_gpu.cu)
 target_link_libraries(test_gpu PRIVATE keplr_gpu)
 add_test(NAME gpu COMMAND test_gpu)
+
+add_executable(test_earth tests/test_earth.cpp)
+target_link_libraries(test_earth PRIVATE keplr_core)
+add_test(NAME earth COMMAND test_earth)
