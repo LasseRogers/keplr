@@ -1,18 +1,9 @@
 #include "kepler.cuh"
+#include "check.hpp"
 
 #include <cmath>
 #include <cstdio>
 #include <initializer_list>
-
-static int failures = 0;
-
-#define CHECK(cond)                                                            \
-    do {                                                                       \
-        if (!(cond)) {                                                         \
-            std::fprintf(stderr, "%s:%d: CHECK(%s)\n", __FILE__, __LINE__, #cond); \
-            ++failures;                                                        \
-        }                                                                      \
-    } while (0)
 
 static double deg(double rad) { return rad * 180.0 / kPi; }
 static double rad(double deg) { return deg * kPi / 180.0; }
@@ -34,6 +25,5 @@ int main() {
         }
     }
 
-    if (failures == 0) std::puts("ok");
-    return failures == 0 ? 0 : 1;
+    return report();
 }

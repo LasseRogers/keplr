@@ -1,17 +1,8 @@
 #include "propagate.cuh"
+#include "check.hpp"
 
 #include <cmath>
 #include <cstdio>
-
-static int failures = 0;
-
-#define CHECK(cond)                                                            \
-    do {                                                                       \
-        if (!(cond)) {                                                         \
-            std::fprintf(stderr, "%s:%d: CHECK(%s)\n", __FILE__, __LINE__, #cond); \
-            ++failures;                                                        \
-        }                                                                      \
-    } while (0)
 
 static double norm(Vec3 v) { return std::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
 
@@ -41,6 +32,5 @@ int main() {
     const Vec3 q = position(flat, 0.0);
     CHECK(std::fabs(q.x - 1.0) < 1e-12 && std::fabs(q.y) < 1e-12 && q.z == 0.0);
 
-    if (failures == 0) std::puts("ok");
-    return failures == 0 ? 0 : 1;
+    return report();
 }

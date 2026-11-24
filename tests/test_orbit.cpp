@@ -1,18 +1,9 @@
 #include "orbit.hpp"
+#include "check.hpp"
 
 #include <cstdio>
 #include <sstream>
 #include <stdexcept>
-
-static int failures = 0;
-
-#define CHECK(cond)                                                            \
-    do {                                                                       \
-        if (!(cond)) {                                                         \
-            std::fprintf(stderr, "%s:%d: CHECK(%s)\n", __FILE__, __LINE__, #cond); \
-            ++failures;                                                        \
-        }                                                                      \
-    } while (0)
 
 static bool throws(const char* csv) {
     std::istringstream in(csv);
@@ -46,6 +37,5 @@ int main() {
     CHECK(throws("spkid,epoch,e,a,i,om,w,ma\n1,2,3\n"));
     CHECK(throws("spkid,epoch,e,a,i,om,w,ma\n1,2,3,4,5,6,7,x\n"));
 
-    if (failures == 0) std::puts("ok");
-    return failures == 0 ? 0 : 1;
+    return report();
 }
