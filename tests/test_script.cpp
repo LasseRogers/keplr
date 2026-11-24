@@ -48,9 +48,15 @@ int main() {
     CHECK(cam.has_camera());
     const Camera k = cam.camera(10);
     CHECK(k.rotate_x == 10.0f && k.rotate_y == -10.0f && k.distance == 2.0f);
-    CHECK(color_throws("function color(a) return 1, 1, 1 end\n"
-                       "function camera(f) return 'up' end",
-                       Orbit{}, Approach{}) == false);  // color() itself is fine
+    auto bad_camera = Script::from_string("function color(a) return 1, 1, 1 end\n"
+                                          "function camera(f) return 'up' end");
+    bool threw = false;
+    try {
+        bad_camera.camera(0);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    CHECK(threw);
 
     CHECK(load_throws("function color(a"));  // syntax error
     CHECK(load_throws("x = 1"));             // no color()
