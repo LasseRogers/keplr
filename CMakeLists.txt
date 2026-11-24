@@ -100,3 +100,8 @@ target_link_libraries(keplr_script PUBLIC keplr_core PRIVATE lua)
 add_executable(test_script tests/test_script.cpp)
 target_link_libraries(test_script PRIVATE keplr_script)
 add_test(NAME script COMMAND test_script)
+
+add_executable(test_lua_scripts tests/test_lua_scripts.cpp)
+target_link_libraries(test_lua_scripts PRIVATE keplr_script)
+target_compile_definitions(test_lua_scripts PRIVATE KEPLR_LUA_DIR="${CMAKE_SOURCE_DIR}/lua")
+add_test(NAME lua_scripts COMMAND test_lua_scripts)
