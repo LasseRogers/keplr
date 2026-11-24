@@ -33,7 +33,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
-#include <numeric>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -50,14 +51,13 @@
 #include "earth.cuh"
 #include "gpu.cuh"
 #include "orbit.hpp"
+#include "script.hpp"
 #include "propagate.cuh"
 
 namespace {
 
 constexpr int kWindowWidth = 1024, kWindowHeight = 768;
 constexpr int kRefreshMs = 10;
-// Same distance NASA uses to call an asteroid potentially hazardous, applied to actual passes.
-constexpr double kHazardAu = 0.05;
 constexpr int kSearchDays = 3653;
 
 GLuint vbo = 0, color_vbo = 0;
@@ -70,6 +70,12 @@ double days_per_frame = 1.0;
 bool paused = false;
 
 std::vector<Vec3> earth_orbit;
+
+struct Visible {
+    Orbit orbit;
+    Color color;
+    double dist;
+};
 
 int mouse_old_x = 0, mouse_old_y = 0, mouse_buttons = 0;
 float rotate_x = 0.0f, rotate_y = 0.0f, translate_z = -6.0f;
@@ -249,9 +255,20 @@ bool init_gl(int* argc, char** argv) {
 
 }  // namespace
 
-// Usage: viewer [orbits.csv]
+// Usage: viewer [orbits.csv] [script.lua]
 int main(int argc, char** argv) {
     const std::string path = argc > 1 ? argv[1] : "data/neo.csv";
+    const std::string script_path = argc > 2 ? argv[2] : "lua/hazard.lua";
+
+    // Load the script before opening a window, so a typo fails fast.
+    std::optional<Script> script;
+    try {
+        script.emplace(Script::from_file(script_path));
+    } catch (const std::runtime_error& e) {
+        std::fprintf(stderr, "%s\n", e.what());
+        return EXIT_FAILURE;
+    }
+
     std::ifstream in(path);
     if (!in) {
         std::fprintf(stderr, "cannot open %s (run scripts/fetch_sbdb.py)\n", path.c_str());
@@ -275,27 +292,38 @@ int main(int argc, char** argv) {
     checkCudaErrors(
         cudaMemcpy(d_orbits, orbits.data(), n_orbits * sizeof(Orbit), cudaMemcpyHostToDevice));
 
-    // Search once at startup, then draw close passers last so gray points never cover them.
+    // Search once at startup, then let the script colour or hide each asteroid.
     const std::vector<Approach> approaches = search_approaches(t_jd, kSearchDays);
-    std::vector<int> order(n_orbits);
-    std::iota(order.begin(), order.end(), 0);
-    const auto first_close = std::stable_partition(
-        order.begin(), order.end(), [&](int k) { return approaches[k].dist >= kHazardAu; });
-    const int n_close = static_cast<int>(order.end() - first_close);
-    std::printf("%d of %d asteroids pass within %.2f AU of Earth in the next %d days\n", n_close,
-                n_orbits, kHazardAu, kSearchDays);
+    std::vector<Visible> visible;
+    try {
+        for (int k = 0; k < n_orbits; ++k)
+            if (const auto c = script->color(orbits[k], approaches[k]))
+                visible.push_back({orbits[k], *c, approaches[k].dist});
+    } catch (const std::runtime_error& e) {
+        std::fprintf(stderr, "%s\n", e.what());
+        return EXIT_FAILURE;
+    }
+    if (visible.empty()) {
+        std::fprintf(stderr, "%s hides every asteroid\n", script_path.c_str());
+        return EXIT_FAILURE;
+    }
+    // Closest passers last, so distant points never cover them.
+    std::sort(visible.begin(), visible.end(),
+              [](const Visible& a, const Visible& b) { return a.dist > b.dist; });
+    std::printf("%s shows %zu of %d asteroids\n", script_path.c_str(), visible.size(), n_orbits);
 
-    std::vector<Orbit> sorted(n_orbits);
+    // Only visible asteroids stay on the GPU, so hidden ones cost nothing per frame.
+    n_orbits = static_cast<int>(visible.size());
+    std::vector<Orbit> shown(n_orbits);
     std::vector<float> colors(3 * n_orbits);
     for (int i = 0; i < n_orbits; ++i) {
-        sorted[i] = orbits[order[i]];
-        const bool close = approaches[order[i]].dist < kHazardAu;
-        colors[3 * i + 0] = close ? 1.0f : 0.5f;
-        colors[3 * i + 1] = close ? 0.2f : 0.5f;
-        colors[3 * i + 2] = close ? 0.2f : 0.5f;
+        shown[i] = visible[i].orbit;
+        colors[3 * i + 0] = visible[i].color.r;
+        colors[3 * i + 1] = visible[i].color.g;
+        colors[3 * i + 2] = visible[i].color.b;
     }
     checkCudaErrors(
-        cudaMemcpy(d_orbits, sorted.data(), n_orbits * sizeof(Orbit), cudaMemcpyHostToDevice));
+        cudaMemcpy(d_orbits, shown.data(), n_orbits * sizeof(Orbit), cudaMemcpyHostToDevice));
 
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);

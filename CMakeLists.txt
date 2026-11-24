@@ -71,7 +71,7 @@ target_link_libraries(simplegl PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT)
 
 add_executable(viewer src/viewer.cu)
 target_include_directories(viewer SYSTEM PRIVATE third_party/cuda-samples/Common)
-target_link_libraries(viewer PRIVATE keplr_gpu OpenGL::GL OpenGL::GLU GLUT::GLUT)
+target_link_libraries(viewer PRIVATE keplr_gpu keplr_script OpenGL::GL OpenGL::GLU GLUT::GLUT)
 
 # Lua is embedded from source, pinned by hash, so the project decides its own Lua version.
 include(FetchContent)
