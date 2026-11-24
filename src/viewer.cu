@@ -45,6 +45,7 @@
 #include <helper_cuda.h>
 #include <helper_functions.h>
 
+#include "date.hpp"
 #include "orbit.hpp"
 #include "propagate.cuh"
 
@@ -59,12 +60,15 @@ cudaGraphicsResource* vbo_resource = nullptr;
 Orbit* d_orbits = nullptr;
 int n_orbits = 0;
 double t_jd = 0.0;
+double days_per_frame = 1.0;
+bool paused = false;
 
 int mouse_old_x = 0, mouse_old_y = 0, mouse_buttons = 0;
 float rotate_x = 0.0f, rotate_y = 0.0f, translate_z = -6.0f;
 
 StopWatchInterface* timer = nullptr;
 int fps_count = 0, fps_limit = 1;
+float fps = 0.0f;
 
 // Heliocentric ecliptic positions in AU. Float is plenty for pixels; the orbit math stays double.
 __global__ void positions_kernel(const Orbit* orbits, float4* out, int n, double t) {
@@ -88,13 +92,17 @@ void run_cuda() {
 
 void compute_fps() {
     if (++fps_count < fps_limit) return;
-    const float fps = 1.0f / (sdkGetAverageTimerValue(&timer) / 1000.0f);
+    fps = 1.0f / (sdkGetAverageTimerValue(&timer) / 1000.0f);
     fps_count = 0;
     fps_limit = std::max(static_cast<int>(fps), 1);
     sdkResetTimer(&timer);
+}
 
-    char title[128];
-    std::snprintf(title, sizeof title, "keplr: %d asteroids, %.1f fps", n_orbits, fps);
+void update_title() {
+    const Date d = jd_to_date(t_jd);
+    char title[160];
+    std::snprintf(title, sizeof title, "keplr: %04d-%02d-%02d  %g days/frame%s  %d asteroids  %.0f fps",
+                  d.year, d.month, d.day, days_per_frame, paused ? " (paused)" : "", n_orbits, fps);
     glutSetWindowTitle(title);
 }
 
@@ -120,6 +128,9 @@ void display() {
     glutSwapBuffers();
     sdkStopTimer(&timer);
     compute_fps();
+
+    if (!paused) t_jd += days_per_frame;
+    update_title();
 }
 
 void timer_event(int) {
@@ -129,8 +140,15 @@ void timer_event(int) {
     }
 }
 
+// Esc quits, space pauses, +/- double or halve the speed of time.
 void keyboard(unsigned char key, int, int) {
-    if (key == 27) glutDestroyWindow(glutGetWindow());
+    switch (key) {
+        case 27: glutDestroyWindow(glutGetWindow()); break;
+        case ' ': paused = !paused; break;
+        case '+':
+        case '=': days_per_frame *= 2.0; break;
+        case '-': days_per_frame /= 2.0; break;
+    }
 }
 
 void mouse(int button, int state, int x, int y) {
