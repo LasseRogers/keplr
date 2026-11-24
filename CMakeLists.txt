@@ -33,3 +33,11 @@ add_test(NAME kepler COMMAND test_kepler)
 add_executable(test_propagate tests/test_propagate.cpp)
 target_link_libraries(test_propagate PRIVATE keplr_core)
 add_test(NAME propagate COMMAND test_propagate)
+
+# Separate from keplr_core so CPU-only code never links the CUDA runtime.
+add_library(keplr_gpu src/gpu.cu)
+target_link_libraries(keplr_gpu PUBLIC keplr_core)
+
+add_executable(test_gpu tests/test_gpu.cu)
+target_link_libraries(test_gpu PRIVATE keplr_gpu)
+add_test(NAME gpu COMMAND test_gpu)
