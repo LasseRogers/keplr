@@ -46,6 +46,7 @@
 #include <helper_functions.h>
 
 #include "date.hpp"
+#include "earth.cuh"
 #include "orbit.hpp"
 #include "propagate.cuh"
 
@@ -62,6 +63,8 @@ int n_orbits = 0;
 double t_jd = 0.0;
 double days_per_frame = 1.0;
 bool paused = false;
+
+std::vector<Vec3> earth_orbit;
 
 int mouse_old_x = 0, mouse_old_y = 0, mouse_buttons = 0;
 float rotate_x = 0.0f, rotate_y = 0.0f, translate_z = -6.0f;
@@ -124,6 +127,22 @@ void display() {
     glDrawArrays(GL_POINTS, 0, n_orbits);
     glDisableClientState(GL_VERTEX_ARRAY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    // A handful of vertices: immediate mode is simplest, only the asteroids need the VBO.
+    glColor3f(0.2f, 0.3f, 0.6f);
+    glBegin(GL_LINE_LOOP);
+    for (const Vec3& q : earth_orbit) glVertex3d(q.x, q.y, q.z);
+    glEnd();
+
+    const Vec3 e = earth_position(t_jd);
+    glPointSize(8.0f);
+    glBegin(GL_POINTS);
+    glColor3f(1.0f, 0.85f, 0.2f);
+    glVertex3d(0.0, 0.0, 0.0);
+    glColor3f(0.3f, 0.6f, 1.0f);
+    glVertex3d(e.x, e.y, e.z);
+    glEnd();
+    glPointSize(1.0f);
 
     glutSwapBuffers();
     sdkStopTimer(&timer);
@@ -218,6 +237,11 @@ int main(int argc, char** argv) {
     n_orbits = static_cast<int>(orbits.size());
     // A still snapshot at the elements' epoch for now.
     t_jd = orbits.front().epoch;
+
+    // One sidereal year from the start; the orbit barely changes over the decades shown.
+    constexpr int kOrbitPoints = 365;
+    for (int k = 0; k < kOrbitPoints; ++k)
+        earth_orbit.push_back(earth_position(t_jd + k * 365.25636 / kOrbitPoints));
 
     // The GL context must exist before CUDA touches the device, so the two can share buffers.
     if (!init_gl(&argc, argv)) return EXIT_FAILURE;
