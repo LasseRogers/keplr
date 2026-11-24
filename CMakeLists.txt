@@ -25,3 +25,7 @@ target_compile_features(keplr_core PUBLIC cxx_std_17)
 add_executable(test_orbit tests/test_orbit.cpp)
 target_link_libraries(test_orbit PRIVATE keplr_core)
 add_test(NAME orbit COMMAND test_orbit)
+
+add_executable(test_kepler tests/test_kepler.cpp)
+target_link_libraries(test_kepler PRIVATE keplr_core)
+add_test(NAME kepler COMMAND test_kepler)
