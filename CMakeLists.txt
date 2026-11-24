@@ -17,3 +17,11 @@ enable_testing()
 add_executable(test_device tests/test_device.cu)
 target_include_directories(test_device PRIVATE src)
 add_test(NAME device COMMAND test_device)
+
+add_library(keplr_core src/orbit.cpp)
+target_include_directories(keplr_core PUBLIC src)
+target_compile_features(keplr_core PUBLIC cxx_std_17)
+
+add_executable(test_orbit tests/test_orbit.cpp)
+target_link_libraries(test_orbit PRIVATE keplr_core)
+add_test(NAME orbit COMMAND test_orbit)
