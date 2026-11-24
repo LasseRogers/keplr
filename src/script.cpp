@@ -38,6 +38,10 @@ Script Script::make(const std::string& source_or_path, bool is_file) {
     const bool has_color = lua_isfunction(L, -1);
     lua_pop(L, 1);
     if (!has_color) throw std::runtime_error("script defines no color(a) function");
+
+    lua_getglobal(L, "camera");
+    s.has_camera_ = lua_isfunction(L, -1);
+    lua_pop(L, 1);
     return s;
 }
 
@@ -74,4 +78,19 @@ std::optional<Color> Script::color(const Orbit& o, const Approach& approach) {
     }
     lua_pop(L, 3);
     return out;
+}
+
+Camera Script::camera(long frame) {
+    lua_State* L = L_.get();
+    lua_getglobal(L, "camera");
+    lua_pushinteger(L, frame);
+    if (lua_pcall(L, 1, 3, 0) != LUA_OK) throw lua_failure(L, "camera()");
+
+    int ok_x = 0, ok_y = 0, ok_d = 0;
+    const Camera c{static_cast<float>(lua_tonumberx(L, -3, &ok_x)),
+                   static_cast<float>(lua_tonumberx(L, -2, &ok_y)),
+                   static_cast<float>(lua_tonumberx(L, -1, &ok_d))};
+    lua_pop(L, 3);
+    if (!(ok_x && ok_y && ok_d)) throw std::runtime_error("camera() must return three numbers");
+    return c;
 }

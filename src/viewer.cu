@@ -70,6 +70,8 @@ double days_per_frame = 1.0;
 bool paused = false;
 
 std::vector<Vec3> earth_orbit;
+std::optional<Script> script;
+long frame = 0;
 
 struct Visible {
     Orbit orbit;
@@ -139,6 +141,19 @@ void display() {
     sdkStartTimer(&timer);
     run_cuda();
 
+    // A scripted camera overrides the mouse, so tours and recordings are repeatable.
+    if (script->has_camera()) {
+        try {
+            const Camera c = script->camera(frame);
+            rotate_x = c.rotate_x;
+            rotate_y = c.rotate_y;
+            translate_z = -c.distance;
+        } catch (const std::runtime_error& e) {
+            std::fprintf(stderr, "%s\n", e.what());
+            std::exit(EXIT_FAILURE);
+        }
+    }
+
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -177,7 +192,10 @@ void display() {
     sdkStopTimer(&timer);
     compute_fps();
 
-    if (!paused) t_jd += days_per_frame;
+    if (!paused) {
+        t_jd += days_per_frame;
+        ++frame;
+    }
     update_title();
 }
 
@@ -261,7 +279,6 @@ int main(int argc, char** argv) {
     const std::string script_path = argc > 2 ? argv[2] : "lua/hazard.lua";
 
     // Load the script before opening a window, so a typo fails fast.
-    std::optional<Script> script;
     try {
         script.emplace(Script::from_file(script_path));
     } catch (const std::runtime_error& e) {

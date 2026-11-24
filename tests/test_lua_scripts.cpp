@@ -33,6 +33,10 @@ int main() {
             for (const Orbit& o : samples)
                 for (const Approach& a : approaches)
                     if (const auto c = s.color(o, a)) CHECK(in_unit(*c));
+            if (s.has_camera()) {
+                s.camera(0);
+                s.camera(100000);  // well past any tour's end
+            }
         } catch (const std::runtime_error& e) {
             std::fprintf(stderr, "%s\n", e.what());
             CHECK(false);

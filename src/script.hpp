@@ -12,16 +12,27 @@ struct Color {
     float r, g, b;
 };
 
-// A user Lua script deciding how each asteroid is drawn. It must define
+struct Camera {
+    float rotate_x, rotate_y;  // degrees
+    float distance;            // AU from the Sun
+};
+
+// A user Lua script deciding how asteroids are drawn. It must define
 //   color(a) -> r, g, b (each 0..1), or nil to hide the asteroid,
 // where `a` has the SBDB elements spkid, a, e, i, om, w, ma and the closest approach to Earth
-// as dist (AU) and t (JD TDB). Every Lua failure surfaces as std::runtime_error.
+// as dist (AU) and t (JD TDB). It may define
+//   camera(frame) -> rotate_x, rotate_y, distance
+// which then drives the view instead of the mouse. Every Lua failure surfaces as
+// std::runtime_error.
 class Script {
 public:
     static Script from_file(const std::string& path);
     static Script from_string(const std::string& source);
 
     std::optional<Color> color(const Orbit& o, const Approach& approach);
+
+    bool has_camera() const { return has_camera_; }
+    Camera camera(long frame);
 
 private:
     struct LuaDeleter {
@@ -32,4 +43,5 @@ private:
     explicit Script(lua_State* L) : L_(L) {}
 
     std::unique_ptr<lua_State, LuaDeleter> L_;
+    bool has_camera_ = false;
 };

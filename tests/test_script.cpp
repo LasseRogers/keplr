@@ -41,6 +41,17 @@ int main() {
     auto id = Script::from_string("function color(a) return a.spkid == 20000433 and 1 or 0, 0, 0 end");
     CHECK(id.color(eros, far)->r == 1.0f);
 
+    // camera() is optional; when present it gets the frame number.
+    CHECK(!s.has_camera());
+    auto cam = Script::from_string("function color(a) return 1, 1, 1 end\n"
+                                   "function camera(f) return f, -f, 2 end");
+    CHECK(cam.has_camera());
+    const Camera k = cam.camera(10);
+    CHECK(k.rotate_x == 10.0f && k.rotate_y == -10.0f && k.distance == 2.0f);
+    CHECK(color_throws("function color(a) return 1, 1, 1 end\n"
+                       "function camera(f) return 'up' end",
+                       Orbit{}, Approach{}) == false);  // color() itself is fine
+
     CHECK(load_throws("function color(a"));  // syntax error
     CHECK(load_throws("x = 1"));             // no color()
     CHECK(color_throws("function color(a) return 'red' end", eros, far));
