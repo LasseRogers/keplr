@@ -92,3 +92,11 @@ target_link_libraries(lua PUBLIC m ${CMAKE_DL_LIBS})
 add_executable(test_lua tests/test_lua.cpp)
 target_link_libraries(test_lua PRIVATE lua)
 add_test(NAME lua COMMAND test_lua)
+
+# Separate so only code that runs user scripts links Lua.
+add_library(keplr_script src/script.cpp)
+target_link_libraries(keplr_script PUBLIC keplr_core PRIVATE lua)
+
+add_executable(test_script tests/test_script.cpp)
+target_link_libraries(test_script PRIVATE keplr_script)
+add_test(NAME script COMMAND test_script)
