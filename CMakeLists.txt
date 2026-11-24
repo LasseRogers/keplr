@@ -11,3 +11,9 @@ set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 # clangd picks up build/compile_commands.json on its own.
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+enable_testing()
+
+add_executable(test_device tests/test_device.cu)
+target_include_directories(test_device PRIVATE src)
+add_test(NAME device COMMAND test_device)
