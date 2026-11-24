@@ -60,3 +60,11 @@ target_link_libraries(keplr PRIVATE keplr_gpu)
 add_executable(test_refine tests/test_refine.cpp)
 target_link_libraries(test_refine PRIVATE keplr_core)
 add_test(NAME refine COMMAND test_refine)
+
+# NVIDIA's simpleGL sample, vendored unchanged as the starting point for the viewer.
+find_package(OpenGL REQUIRED)
+find_package(GLUT REQUIRED)
+
+add_executable(simplegl third_party/cuda-samples/simpleGL/simpleGL.cu)
+target_include_directories(simplegl SYSTEM PRIVATE third_party/cuda-samples/Common)
+target_link_libraries(simplegl PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT)
