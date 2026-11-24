@@ -35,7 +35,7 @@ int main() {
     CUDA_CHECK(cudaMemcpy(d_orbits, orbits.data(), n * sizeof(Orbit), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_earth, earth.data(), steps * sizeof(Vec3), cudaMemcpyHostToDevice));
 
-    approach_gpu(d_orbits, d_earth, d_out, n, t0, dt, steps);
+    approach_gpu(d_orbits, kEarth, d_earth, d_out, n, t0, dt, steps);
 
     std::vector<Approach> gpu(n);
     CUDA_CHECK(cudaMemcpy(gpu.data(), d_out, n * sizeof(Approach), cudaMemcpyDeviceToHost));
@@ -45,7 +45,8 @@ int main() {
 
     double worst_d = 0.0, worst_t = 0.0;
     for (int k = 0; k < n; ++k) {
-        const Approach c = closest_approach(orbits[k], earth.data(), t0, dt, steps);
+        const Approach c = refine_approach(
+            orbits[k], kEarth, closest_approach(orbits[k], earth.data(), t0, dt, steps), dt);
         worst_d = std::max(worst_d, std::fabs(gpu[k].dist - c.dist));
         worst_t = std::max(worst_t, std::fabs(gpu[k].t - c.t));
     }

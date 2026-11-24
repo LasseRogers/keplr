@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaEventCreate(&start));
     CUDA_CHECK(cudaEventCreate(&stop));
     CUDA_CHECK(cudaEventRecord(start));
-    approach_gpu(d_orbits, d_earth, d_out, n, t0, dt, steps);
+    approach_gpu(d_orbits, kEarth, d_earth, d_out, n, t0, dt, steps);
     CUDA_CHECK(cudaEventRecord(stop));
     CUDA_CHECK(cudaEventSynchronize(stop));
     float ms = 0.0f;

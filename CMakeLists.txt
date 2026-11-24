@@ -56,3 +56,7 @@ add_test(NAME date COMMAND test_date)
 
 add_executable(keplr src/main.cu)
 target_link_libraries(keplr PRIVATE keplr_gpu)
+
+add_executable(test_refine tests/test_refine.cpp)
+target_link_libraries(test_refine PRIVATE keplr_core)
+add_test(NAME refine COMMAND test_refine)
