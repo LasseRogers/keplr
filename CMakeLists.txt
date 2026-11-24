@@ -45,3 +45,7 @@ add_test(NAME gpu COMMAND test_gpu)
 add_executable(test_earth tests/test_earth.cpp)
 target_link_libraries(test_earth PRIVATE keplr_core)
 add_test(NAME earth COMMAND test_earth)
+
+add_executable(test_approach tests/test_approach.cu)
+target_link_libraries(test_approach PRIVATE keplr_gpu)
+add_test(NAME approach COMMAND test_approach)
