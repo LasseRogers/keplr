@@ -5,7 +5,7 @@ set(CMAKE_CUDA_HOST_COMPILER g++-12 CACHE STRING "Host compiler for nvcc")
 # Target the GPU in this machine rather than a generic architecture list.
 set(CMAKE_CUDA_ARCHITECTURES native)
 
-project(keplr LANGUAGES CXX CUDA)
+project(keplr LANGUAGES C CXX CUDA)
 
 set(CMAKE_CUDA_STANDARD 17)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
@@ -72,3 +72,23 @@ target_link_libraries(simplegl PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT)
 add_executable(viewer src/viewer.cu)
 target_include_directories(viewer SYSTEM PRIVATE third_party/cuda-samples/Common)
 target_link_libraries(viewer PRIVATE keplr_gpu OpenGL::GL OpenGL::GLU GLUT::GLUT)
+
+# Lua is embedded from source, pinned by hash, so the project decides its own Lua version.
+include(FetchContent)
+FetchContent_Declare(lua
+    URL https://www.lua.org/ftp/lua-5.4.8.tar.gz
+    URL_HASH SHA256=4f18ddae154e793e46eeab727c59ef1c0c0c2b744e7b94219710d76f530629ae
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+FetchContent_MakeAvailable(lua)
+
+# Everything but the standalone interpreter and compiler, which carry their own main().
+file(GLOB LUA_SOURCES ${lua_SOURCE_DIR}/src/*.c)
+list(REMOVE_ITEM LUA_SOURCES ${lua_SOURCE_DIR}/src/lua.c ${lua_SOURCE_DIR}/src/luac.c)
+add_library(lua STATIC ${LUA_SOURCES})
+target_include_directories(lua SYSTEM PUBLIC ${lua_SOURCE_DIR}/src)
+target_compile_definitions(lua PRIVATE LUA_USE_LINUX)
+target_link_libraries(lua PUBLIC m ${CMAKE_DL_LIBS})
+
+add_executable(test_lua tests/test_lua.cpp)
+target_link_libraries(test_lua PRIVATE lua)
+add_test(NAME lua COMMAND test_lua)
