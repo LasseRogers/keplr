@@ -30,6 +30,7 @@
 // CUDA writes positions straight into the OpenGL vertex buffer, so frames never leave the GPU.
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
@@ -82,9 +83,8 @@ struct Visible {
 int mouse_old_x = 0, mouse_old_y = 0, mouse_buttons = 0;
 float rotate_x = 0.0f, rotate_y = 0.0f, translate_z = -6.0f;
 
-StopWatchInterface* timer = nullptr;
-int fps_count = 0, fps_limit = 1;
 float fps = 0.0f;
+float point_alpha = 1.0f;
 
 // Heliocentric ecliptic positions in AU. Float is plenty for pixels; the orbit math stays double.
 __global__ void positions_kernel(const Orbit* orbits, float4* out, int n, double t) {
@@ -121,12 +121,15 @@ void run_cuda() {
     checkCudaErrors(cudaGraphicsUnmapResources(1, &vbo_resource, 0));
 }
 
-void compute_fps() {
-    if (++fps_count < fps_limit) return;
-    fps = 1.0f / (sdkGetAverageTimerValue(&timer) / 1000.0f);
-    fps_count = 0;
-    fps_limit = std::max(static_cast<int>(fps), 1);
-    sdkResetTimer(&timer);
+// Smoothed wall-clock interval between frames. Timing only the display callback would measure
+// how fast commands are queued for the GPU, not how often frames reach the screen.
+void update_fps() {
+    using clock = std::chrono::steady_clock;
+    static clock::time_point last = clock::now();
+    const clock::time_point now = clock::now();
+    const float dt = std::chrono::duration<float>(now - last).count();
+    last = now;
+    if (dt > 0.0f) fps = fps == 0.0f ? 1.0f / dt : 0.95f * fps + 0.05f / dt;
 }
 
 void update_title() {
@@ -138,7 +141,6 @@ void update_title() {
 }
 
 void display() {
-    sdkStartTimer(&timer);
     run_cuda();
 
     // A scripted camera overrides the mouse, so tours and recordings are repeatable.
@@ -167,7 +169,12 @@ void display() {
     glColorPointer(3, GL_FLOAT, 0, nullptr);
     glEnableClientState(GL_VERTEX_ARRAY);
     glEnableClientState(GL_COLOR_ARRAY);
+    // Additive blending: dense regions glow brighter instead of saturating to a flat colour.
+    glEnable(GL_BLEND);
+    glBlendColor(0.0f, 0.0f, 0.0f, point_alpha);
+    glBlendFunc(GL_CONSTANT_ALPHA, GL_ONE);
     glDrawArrays(GL_POINTS, 0, n_orbits);
+    glDisable(GL_BLEND);
     glDisableClientState(GL_COLOR_ARRAY);
     glDisableClientState(GL_VERTEX_ARRAY);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -189,8 +196,7 @@ void display() {
     glPointSize(1.0f);
 
     glutSwapBuffers();
-    sdkStopTimer(&timer);
-    compute_fps();
+    update_fps();
 
     if (!paused) {
         t_jd += days_per_frame;
@@ -206,7 +212,7 @@ void timer_event(int) {
     }
 }
 
-// Esc quits, space pauses, +/- double or halve the speed of time.
+// Esc quits, space pauses, +/- double or halve the speed of time, [/] dim or brighten points.
 void keyboard(unsigned char key, int, int) {
     switch (key) {
         case 27: glutDestroyWindow(glutGetWindow()); break;
@@ -214,6 +220,8 @@ void keyboard(unsigned char key, int, int) {
         case '+':
         case '=': days_per_frame *= 2.0; break;
         case '-': days_per_frame /= 2.0; break;
+        case '[': point_alpha = std::max(point_alpha * 0.8f, 0.005f); break;
+        case ']': point_alpha = std::min(point_alpha * 1.25f, 1.0f); break;
     }
 }
 
@@ -240,7 +248,6 @@ void motion(int x, int y) {
 }
 
 void cleanup() {
-    sdkDeleteTimer(&timer);
     if (vbo) {
         checkCudaErrors(cudaGraphicsUnregisterResource(vbo_resource));
         glDeleteBuffers(1, &vbo);
@@ -331,6 +338,9 @@ int main(int argc, char** argv) {
 
     // Only visible asteroids stay on the GPU, so hidden ones cost nothing per frame.
     n_orbits = static_cast<int>(visible.size());
+    // Around 50k points read well at full brightness; dim each one beyond that so the
+    // total light stays roughly constant and the main belt glows instead of saturating.
+    point_alpha = std::clamp(50'000.0f / n_orbits, 0.03f, 1.0f);
     std::vector<Orbit> shown(n_orbits);
     std::vector<float> colors(3 * n_orbits);
     for (int i = 0; i < n_orbits; ++i) {
@@ -356,7 +366,6 @@ int main(int argc, char** argv) {
     glBufferData(GL_ARRAY_BUFFER, colors.size() * sizeof(float), colors.data(), GL_STATIC_DRAW);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
 
-    sdkCreateTimer(&timer);
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
     glutMouseFunc(mouse);
