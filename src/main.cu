@@ -1,6 +1,6 @@
 #include "cuda_check.cuh"
 #include "date.hpp"
-#include "earth.hpp"
+#include "earth.cuh"
 #include "gpu.cuh"
 #include "orbit.hpp"
 
@@ -43,7 +43,7 @@ int main(int argc, char** argv) {
     // Start at the elements' epoch, where the two-body model is most accurate.
     const double t0 = orbits.front().epoch, dt = 1.0;
     const int steps = static_cast<int>(years * 365.25);
-    const auto earth = earth_table(kEarth, t0, dt, steps);
+    const auto earth = earth_table(t0, dt, steps);
 
     Orbit* d_orbits;
     Vec3* d_earth;
@@ -58,7 +58,7 @@ int main(int argc, char** argv) {
     CUDA_CHECK(cudaEventCreate(&start));
     CUDA_CHECK(cudaEventCreate(&stop));
     CUDA_CHECK(cudaEventRecord(start));
-    approach_gpu(d_orbits, kEarth, d_earth, d_out, n, t0, dt, steps);
+    approach_gpu(d_orbits, d_earth, d_out, n, t0, dt, steps);
     CUDA_CHECK(cudaEventRecord(stop));
     CUDA_CHECK(cudaEventSynchronize(stop));
     float ms = 0.0f;

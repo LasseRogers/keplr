@@ -1,7 +1,7 @@
 #include "gpu.cuh"
 #include "check.hpp"
 #include "cuda_check.cuh"
-#include "earth.hpp"
+#include "earth.cuh"
 
 #include <algorithm>
 #include <cmath>
@@ -12,10 +12,10 @@
 int main() {
     constexpr double t0 = 2461041.5, dt = 1.0;  // daily from 2026-01-01
     constexpr int steps = 3653;                 // ten years
-    const auto earth = earth_table(kEarth, t0, dt, steps);
+    const auto earth = earth_table(t0, dt, steps);
 
-    // A body sharing Earth's orbit never leaves it.
-    CHECK(closest_approach(kEarth, earth.data(), t0, dt, steps).dist < 1e-12);
+    // An orbit osculating Earth's at t0 coincides with Earth there.
+    CHECK(closest_approach(earth_elements(t0), earth.data(), t0, dt, steps).dist < 1e-12);
 
     // Earth-crossing synthetic orbits: the GPU must reproduce the CPU search.
     constexpr int n = 2000;
@@ -35,7 +35,7 @@ int main() {
     CUDA_CHECK(cudaMemcpy(d_orbits, orbits.data(), n * sizeof(Orbit), cudaMemcpyHostToDevice));
     CUDA_CHECK(cudaMemcpy(d_earth, earth.data(), steps * sizeof(Vec3), cudaMemcpyHostToDevice));
 
-    approach_gpu(d_orbits, kEarth, d_earth, d_out, n, t0, dt, steps);
+    approach_gpu(d_orbits, d_earth, d_out, n, t0, dt, steps);
 
     std::vector<Approach> gpu(n);
     CUDA_CHECK(cudaMemcpy(gpu.data(), d_out, n * sizeof(Approach), cudaMemcpyDeviceToHost));
@@ -45,8 +45,8 @@ int main() {
 
     double worst_d = 0.0, worst_t = 0.0;
     for (int k = 0; k < n; ++k) {
-        const Approach c = refine_approach(
-            orbits[k], kEarth, closest_approach(orbits[k], earth.data(), t0, dt, steps), dt);
+        const Approach c =
+            refine_approach(orbits[k], closest_approach(orbits[k], earth.data(), t0, dt, steps), dt);
         worst_d = std::max(worst_d, std::fabs(gpu[k].dist - c.dist));
         worst_t = std::max(worst_t, std::fabs(gpu[k].t - c.t));
     }

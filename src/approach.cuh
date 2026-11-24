@@ -1,6 +1,7 @@
 #pragma once
 #include <vector>
 
+#include "earth.cuh"
 #include "propagate.cuh"
 
 struct Approach {
@@ -28,8 +29,8 @@ KEPLR_HD inline Approach closest_approach(const Orbit& o, const Vec3* earth, dou
     return {sqrt(best_d2), best_t};
 }
 
-KEPLR_HD inline double dist2_at(const Orbit& o, const Orbit& earth, double t) {
-    const Vec3 p = position(o, t), q = position(earth, t);
+KEPLR_HD inline double dist2_at(const Orbit& o, double t) {
+    const Vec3 p = position(o, t), q = earth_position(t);
     const double dx = p.x - q.x, dy = p.y - q.y, dz = p.z - q.z;
     return dx * dx + dy * dy + dz * dz;
 }
@@ -37,29 +38,28 @@ KEPLR_HD inline double dist2_at(const Orbit& o, const Orbit& earth, double t) {
 // Golden-section search on [coarse.t - dt, coarse.t + dt]: the true minimum lies between the
 // sampled neighbours, and distance is unimodal over so short a window. Evaluates Earth exactly
 // rather than from the table. A minimum at the span's edge may refine slightly past it.
-KEPLR_HD inline Approach refine_approach(const Orbit& o, const Orbit& earth, Approach coarse,
-                                         double dt) {
+KEPLR_HD inline Approach refine_approach(const Orbit& o, Approach coarse, double dt) {
     constexpr double g = 0.6180339887498949;  // 1/phi
     double lo = coarse.t - dt, hi = coarse.t + dt;
     double x1 = hi - g * (hi - lo), x2 = lo + g * (hi - lo);
-    double f1 = dist2_at(o, earth, x1), f2 = dist2_at(o, earth, x2);
+    double f1 = dist2_at(o, x1), f2 = dist2_at(o, x2);
     // Each iteration shrinks the window by 1/phi: 2 days * 0.618^40 is about a millisecond.
     for (int k = 0; k < 40; ++k) {
         if (f1 < f2) {
             hi = x2, x2 = x1, f2 = f1;
-            x1 = hi - g * (hi - lo), f1 = dist2_at(o, earth, x1);
+            x1 = hi - g * (hi - lo), f1 = dist2_at(o, x1);
         } else {
             lo = x1, x1 = x2, f1 = f2;
-            x2 = lo + g * (hi - lo), f2 = dist2_at(o, earth, x2);
+            x2 = lo + g * (hi - lo), f2 = dist2_at(o, x2);
         }
     }
     const double t = 0.5 * (lo + hi);
-    return {sqrt(dist2_at(o, earth, t)), t};
+    return {sqrt(dist2_at(o, t)), t};
 }
 
 // Earth's position at every sample instant, built once on the host.
-inline std::vector<Vec3> earth_table(const Orbit& earth, double t0, double dt, int steps) {
+inline std::vector<Vec3> earth_table(double t0, double dt, int steps) {
     std::vector<Vec3> table(steps);
-    for (int k = 0; k < steps; ++k) table[k] = position(earth, t0 + k * dt);
+    for (int k = 0; k < steps; ++k) table[k] = earth_position(t0 + k * dt);
     return table;
 }
