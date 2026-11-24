@@ -29,3 +29,7 @@ add_test(NAME orbit COMMAND test_orbit)
 add_executable(test_kepler tests/test_kepler.cpp)
 target_link_libraries(test_kepler PRIVATE keplr_core)
 add_test(NAME kepler COMMAND test_kepler)
+
+add_executable(test_propagate tests/test_propagate.cpp)
+target_link_libraries(test_propagate PRIVATE keplr_core)
+add_test(NAME propagate COMMAND test_propagate)
