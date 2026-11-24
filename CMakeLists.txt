@@ -68,3 +68,7 @@ find_package(GLUT REQUIRED)
 add_executable(simplegl third_party/cuda-samples/simpleGL/simpleGL.cu)
 target_include_directories(simplegl SYSTEM PRIVATE third_party/cuda-samples/Common)
 target_link_libraries(simplegl PRIVATE OpenGL::GL OpenGL::GLU GLUT::GLUT)
+
+add_executable(viewer src/viewer.cu)
+target_include_directories(viewer SYSTEM PRIVATE third_party/cuda-samples/Common)
+target_link_libraries(viewer PRIVATE keplr_core OpenGL::GL OpenGL::GLU GLUT::GLUT)
