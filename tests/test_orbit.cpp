@@ -33,6 +33,10 @@ int main() {
     CHECK(orbits[1].e == .54659281141853);
     CHECK(orbits[1].ma == 286.6772166822684);
 
+    std::istringstream crlf("spkid,epoch,e,a,i,om,w,ma\r\n1,2,3,4,5,6,7,8\r\n");
+    const auto windows = load_orbits(crlf);
+    CHECK(windows.size() == 1 && windows[0].ma == 8.0);
+
     CHECK(throws("wrong,header\n"));
     CHECK(throws("spkid,epoch,e,a,i,om,w,ma\n1,2,3\n"));
     CHECK(throws("spkid,epoch,e,a,i,om,w,ma\n1,2,3,4,5,6,7,x\n"));

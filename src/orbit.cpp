@@ -22,15 +22,22 @@ T parse(std::string_view field, std::string_view line) {
     return value;
 }
 
+// Python's csv module writes CRLF by default; getline only strips the LF.
+void chomp_cr(std::string& s) {
+    if (!s.empty() && s.back() == '\r') s.pop_back();
+}
+
 }  // namespace
 
 std::vector<Orbit> load_orbits(std::istream& in) {
     std::string line;
-    if (!std::getline(in, line) || line != kHeader)
+    if (std::getline(in, line)) chomp_cr(line);
+    if (line != kHeader)
         throw std::runtime_error("unexpected header: " + line);
 
     std::vector<Orbit> orbits;
     while (std::getline(in, line)) {
+        chomp_cr(line);
         if (line.empty()) continue;
 
         std::array<std::string_view, kFields> f;
