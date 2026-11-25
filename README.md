@@ -8,5 +8,6 @@ scripts color, filter and fly the camera.
 cmake -B build && cmake --build build && ctest --test-dir build
 uv run scripts/fetch_sbdb.py --all
 ./build/keplr data/all.csv 10
-./build/viewer data/all.csv lua/groups.lua
+# Hybrid-GPU laptops give OpenGL to the iGPU by default; CUDA-GL interop needs it on the NVIDIA GPU.
+__NV_PRIME_RENDER_OFFLOAD=1 __GLX_VENDOR_LIBRARY_NAME=nvidia ./build/viewer data/all.csv lua/groups.lua
 ```
